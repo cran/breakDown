@@ -13,11 +13,15 @@ model <- glm(left~., data = HR_data, family = "binomial")
 
 ## ---- fig.width=7--------------------------------------------------------
 library(ggplot2)
+predict(model, HR_data[11,], type = "link")
+
 explain_1 <- broken(model, HR_data[11,])
 explain_1
 plot(explain_1) + ggtitle("breakDown plot for linear predictors")
 
 ## ---- fig.width=7--------------------------------------------------------
+predict(model, HR_data[11,], type = "response")
+
 explain_1 <- broken(model, HR_data[11,], baseline = "intercept")
 explain_1
 plot(explain_1, 

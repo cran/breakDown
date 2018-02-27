@@ -19,6 +19,7 @@ broken <- function(model, new_observation, ...) {
 #'
 #' @return an object of the broken class
 #' @export
+#' @importFrom stats predict
 #' @importFrom stats predict.lm
 #' @importFrom stats predict.glm
 #' @importFrom stats terms
@@ -49,7 +50,9 @@ broken.lm <- function(model, new_observation, ..., baseline = 0) {
 
   broken_obj <- data.frame(variable = paste(colnames(ny),  "=",
                                         sapply(new_observation[colnames(ny)], as.character)),
-                       contribution = c(ny))
+                       contribution = c(ny),
+                       variable_name = colnames(ny),
+                       variable_value = sapply(new_observation[colnames(ny)], as.character))
   broken_sorted <- broken_obj[order(-abs(broken_obj$contribution)),]
 
   # set the baseline to the model (Intercept)
@@ -58,7 +61,9 @@ broken.lm <- function(model, new_observation, ..., baseline = 0) {
   } else {
     broken_sorted <- rbind(
       data.frame(variable = "(Intercept)",
-                 contribution = attributes(ny)$constant),
+                 contribution = attributes(ny)$constant,
+                 variable_name = "Intercept",
+                 variable_value = 1),
       broken_sorted)
   }
 
@@ -97,7 +102,7 @@ broken.lm <- function(model, new_observation, ..., baseline = 0) {
 #' @export
 
 broken.glm <- function(model, new_observation, ..., baseline = 0) {
-  ny <- predict.glm(model, newdata = new_observation, type="terms")
+  ny <- predict.glm(model, newdata = new_observation, type = "terms")
   terms <- NULL
 
   # add terms with :
@@ -105,21 +110,31 @@ broken.glm <- function(model, new_observation, ..., baseline = 0) {
   ilabels <- grep(labels, pattern = ":", value = TRUE)
   for (interact in ilabels) {
     vars <- strsplit(interact, split = ":")[[1]]
-    new_observation[,interact] <- apply(new_observation[,vars], 1, paste0, collapse=":")
+    new_observation[,interact] <- apply(new_observation[,vars], 1, paste0, collapse = ":")
   }
 
   broken_obj <- data.frame(variable = paste(colnames(ny),  "=",
                                             sapply(new_observation[colnames(ny)], as.character)),
-                           contribution = c(ny))
+                           contribution = c(ny),
+                           variable_name = colnames(ny),
+                           variable_value = sapply(new_observation[colnames(ny)], as.character))
   broken_sorted <- broken_obj[order(-abs(broken_obj$contribution)),]
 
     # set the baseline to the model (Intercept)
   if (tolower(baseline) == "intercept") {
     baseline <- attributes(ny)$constant
+    broken_sorted <- rbind(
+      data.frame(variable = "(Intercept)",
+                 contribution = 0,
+                 variable_name = "Intercept",
+                 variable_value = 1),
+      broken_sorted)
   } else {
     broken_sorted <- rbind(
       data.frame(variable = "(Intercept)",
-                 contribution = attributes(ny)$constant),
+                 contribution = attributes(ny)$constant - baseline,
+                 variable_name = "Intercept",
+                 variable_value = 1),
       broken_sorted)
   }
 
@@ -127,73 +142,151 @@ broken.glm <- function(model, new_observation, ..., baseline = 0) {
 }
 
 
-#' Create the broken object for ranger models
+#' Create the model agnostic broken object
 #'
 #' @param model a ranger model
 #' @param new_observation a new observation with collumns that corresponds to variables used in the model
+#' @param data the original data used for model fitting, should have same collumns as the 'new_observation'.
+#' @param direction either 'up' or 'down' determined the exploration strategy
 #' @param ... other parameters
 #' @param baseline the orgin/baseline for the breakDown plots, where the rectangles start. It may be a number or a character "Intercept". In the latter case the orgin will be set to model intercept.
+#' @param predict.function function that will calculate predictions out of model. It shall return a single numeric value per observation. For classification it may be a probability of the default class.
 #'
 #' @return an object of the broken class
-#' @import ranger
-#' @importFrom stats predict
 #'
 #' @examples
 #' \dontrun{
-#' library("ranger")
-#' library("ggplot2")
-#' model <- ranger(factor(left) ~ ., data = HR_data, importance = 'impurity')
-#' importance(model)
-#' new_observation <- HR_data[10099,]
-#' explain_1 <- broken(model, new_observation)
+#' library(breakDown)
+#' library(randomForest)
+#' library(ggplot2)
+#' set.seed(1313)
+#' model <- randomForest(factor(left)~., data = HR_data, family = "binomial", maxnodes = 5)
+#' predict.function <- function(model, new_observation)
+#'       predict(model, new_observation, type="prob")[,2]
+#' predict.function(model, HR_data[11,-7])
+#' explain_1 <- broken(model, HR_data[11,-7], data = HR_data[,-7],
+#' predict.function = predict.function, direction = "down")
 #' explain_1
-#' plot(explain_1) +
-#'    ggtitle("breakDown plot for linear predictors of leaving the company") +
-#'    scale_y_continuous( limits = c(0,1), name = "fraction of trees", expand = c(0.1,0.1))
-#'  }
+#' plot(explain_1) + ggtitle("breakDown plot (direction=down) for randomForest model")
+#' }
 #'
 #' @export
 
-broken.ranger <- function(model, new_observation, ..., baseline = 0) {
+broken.default <- function(model, new_observation, data, direction = "up", ..., baseline = 0,
+                          predict.function = predict) {
+  # just in case only some variables are specified
+  common_variables <- intersect(colnames(new_observation), colnames(data))
+  new_observation <- new_observation[,common_variables]
+  data <- data[,common_variables]
 
-  yhat <- predict(model, new_observation, predict.all=TRUE)
-  terminalNodes <- predict(model, new_observation, type="terminalNodes")$predictions
-  varNames <- model$forest$independent.variable.names
-  # find variables on the path
-  selectedVarsForAllTrees <- lapply(seq_along(terminalNodes), function(i){
-    nodesLeft <- model$forest$child.nodeIDs[[i]][[1]]
-    nodesRight <- model$forest$child.nodeIDs[[i]][[2]]
-    nonZeroLeft <- which(nodesLeft > 0)
-    nonZeroRight <- which(nodesRight > 0)
-    parents <- numeric(length(nodesLeft))
-    parents[nodesLeft[nonZeroLeft] + 1] <- nonZeroLeft
-    parents[nodesRight[nonZeroRight] + 1] <- nonZeroRight
-
-    startSearch <- terminalNodes[i] + 1
-    allVars <- model$forest$split.varIDs[[i]]
-    selectedVars <- numeric(length(varNames))
-    while (parents[startSearch] > 0) {
-      selectedVars[allVars[parents[startSearch]]] <- 1
-      startSearch <- parents[startSearch]
-    }
-    selectedVars/sum(selectedVars)
-  })
-
-  varImportance <- matrix(0, nrow = 2, ncol = length(varNames))
-  for (j in seq_along(yhat$predictions[1,])) {
-    wclass <- yhat$predictions[1,j]
-    varImportance[wclass,] <- varImportance[wclass,] + selectedVarsForAllTrees[[j]]
+  if (direction == "up") {
+    broken_sorted <- broken_go_up(model, new_observation, data,
+                                    predict.function, ...)
+  } else {
+    broken_sorted <- broken_go_down(model, new_observation, data,
+                                    predict.function, ...)
   }
-  colnames(varImportance) <- varNames
 
-
-  broken_obj <- data.frame(variable = paste(varNames,  "=",
-                                            sapply(new_observation[varNames], as.character)),
-                           contribution = (varImportance[1,] - varImportance[2,])/(2*sum(varImportance)))
-  broken_sorted <- broken_obj[order(-abs(broken_obj$contribution)),]
-
-  baseline <- 0.5
+  if (tolower(baseline) == "intercept") {
+    baseline <- mean(predict.function(model, data, ...))
+    broken_sorted <- rbind(
+      data.frame(variable = "(Intercept)",
+                 contribution = 0,
+                 variable_name = "Intercept",
+                 variable_value = 1),
+      broken_sorted)
+  } else {
+    broken_sorted <- rbind(
+      data.frame(variable = "(Intercept)",
+                 contribution = mean(predict.function(model, data, ...)) - baseline,
+                 variable_name = "Intercept",
+                 variable_value = 1),
+      broken_sorted)
+  }
 
   create.broken(broken_sorted, baseline)
 }
 
+broken_go_up <- function(model, new_observation, data,
+                           predict.function = predict, ...) {
+  # set target distribution
+  new_data <- new_observation[rep(1,nrow(data)),]
+
+  # set target
+  target_yhat <- predict.function(model, new_observation, ...)
+  baseline_yhat <- mean(predict.function(model, data, ...))
+
+  # set variable indicators
+  open_variables <- 1:ncol(data)
+
+  important_variables <- c()
+  important_yhats <- list()
+
+  for (i in 1:ncol(data)) {
+    yhats <- list()
+    yhats_diff <- rep(-Inf, ncol(data))
+    for (tmp_variable in open_variables) {
+      current_data <- data
+      current_data[,tmp_variable] <- new_data[,tmp_variable]
+      yhats[[tmp_variable]] <- predict.function(model, current_data, ...)
+      yhats_diff[tmp_variable] <- abs(baseline_yhat - mean(yhats[[tmp_variable]]))
+    }
+    important_variables[i] <- which.max(yhats_diff)
+    important_yhats[[i]] <- yhats[[which.max(yhats_diff)]]
+    data[, important_variables[i]] <- new_data[, important_variables[i]]
+    open_variables <- setdiff(open_variables, which.max(yhats_diff))
+  }
+
+  varNames <- colnames(data)[important_variables]
+  varValues <- sapply(new_observation[,important_variables], as.character)
+  contributions <- diff(c(baseline_yhat, sapply(important_yhats, mean)))
+
+  broken_sorted <- data.frame(variable = paste("+", varNames,  "=", varValues),
+                              contribution = contributions,
+                              variable_name = varNames,
+                              variable_value = varValues)
+
+  broken_sorted
+}
+
+broken_go_down <- function(model, new_observation, data,
+                           predict.function = predict, ...) {
+  # set target distribution
+  new_data <- new_observation[rep(1,nrow(data)),]
+
+  # set target
+  target_yhat <- predict.function(model, new_observation, ...)
+  baseline_yhat <- mean(predict.function(model, data, ...))
+
+  # set variable indicators
+  open_variables <- 1:ncol(data)
+
+  important_variables <- c()
+  important_yhats <- list()
+
+  for (i in 1:ncol(data)) {
+    yhats <- list()
+    yhats_diff <- rep(Inf, ncol(data))
+    for (tmp_variable in open_variables) {
+      current_data <- new_data
+      current_data[,tmp_variable] <- data[,tmp_variable]
+      yhats[[tmp_variable]] <- predict.function(model, current_data, ...)
+      yhats_diff[tmp_variable] <- abs(target_yhat - mean(yhats[[tmp_variable]]))
+    }
+    important_variables[i] <- which.min(yhats_diff)
+    important_yhats[[i]] <- yhats[[which.min(yhats_diff)]]
+    new_data[, important_variables[i]] <- data[, important_variables[i]]
+    open_variables <- setdiff(open_variables, which.min(yhats_diff))
+  }
+
+  varNames <- rev(colnames(data)[important_variables])
+  varValues <- sapply(rev(new_observation[,important_variables]), as.character)
+  contributions <- diff(c(baseline_yhat, rev(sapply(important_yhats, mean))))
+
+  broken_sorted <- data.frame(variable = c(paste("-", varNames,  "=", varValues)),
+                              contribution = contributions,
+                              variable_name = varNames,
+                              variable_value = varValues)
+
+  broken_sorted
+}
