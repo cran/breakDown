@@ -10,7 +10,7 @@
 \arguments{
 \item{model}{a ranger model}
 
-\item{new_observation}{a new observation with collumns that corresponds to variables used in the model}
+\item{new_observation}{a new observation with columns that corresponds to variables used in the model}
 
 \item{data}{the original data used for model fitting, should have same collumns as the 'new_observation'.}
 
@@ -43,5 +43,4 @@ predict.function = predict.function, direction = "down")
 explain_1
 plot(explain_1) + ggtitle("breakDown plot (direction=down) for randomForest model")
 }
-
 }

@@ -1,7 +1,7 @@
 #' Create the broken object
 #'
 #' @param model a model
-#' @param new_observation a new observation with collumns that corresponds to variables used in the model
+#' @param new_observation a new observation with columns that corresponds to variables used in the model
 #' @param ... other parameters
 #'
 #' @export
@@ -13,9 +13,10 @@ broken <- function(model, new_observation, ...) {
 #' Create the broken object for lm models
 #'
 #' @param model a lm model
-#' @param new_observation a new observation with collumns that corresponds to variables used in the model
+#' @param new_observation a new observation with columns that corresponds to variables used in the model
 #' @param ... other parameters
 #' @param baseline the orgin/baseline for the breakDown plots, where the rectangles start. It may be a number or a character "Intercept". In the latter case the orgin will be set to model intercept.
+#' @param predict.function function that will calculate predictions out of model (typically \code{predict} or \code{betas})
 #'
 #' @return an object of the broken class
 #' @export
@@ -32,12 +33,19 @@ broken <- function(model, new_observation, ...) {
 #'
 #' # works for interactions as well
 #' model <- lm(Sepal.Length ~ Petal.Width*Species, data = iris)
+#' summary(model)
+#'
 #' new_observation <- iris[1,]
 #' br <- broken(model, new_observation)
+#' br
 #' plot(br)
+#'
+#' br2 <- broken(model, new_observation, predict.function = betas)
+#' br2
+#' plot(br2)
 
-broken.lm <- function(model, new_observation, ..., baseline = 0) {
-  ny <- predict.lm(model, newdata = new_observation, type = "terms")
+broken.lm <- function(model, new_observation, ..., baseline = 0, predict.function = stats::predict.lm) {
+  ny <- predict.function(model, newdata = new_observation, type = "terms")
   terms <- NULL
 
   # add terms with :
@@ -73,12 +81,14 @@ broken.lm <- function(model, new_observation, ..., baseline = 0) {
 #' Create the broken object for glm models
 #'
 #' @param model a glm model
-#' @param new_observation a new observation with collumns that corresponds to variables used in the model
+#' @param new_observation a new observation with columns that corresponds to variables used in the model
 #' @param ... other parameters
-#' @param baseline the orgin/baseline for the breakDown plots, where the rectangles start. It may be a number or a character "Intercept". In the latter case the orgin will be set to model intercept.
+#' @param baseline the origin/baseline for the breakDown plots, where the rectangles start. It may be a number or a character "Intercept". In the latter case the orgin will be set to model intercept.
+#' @param predict.function function that will calculate predictions out of model (typically \code{predict} or \code{betas})
 #'
 #' @return an object of the broken class
 #' @importFrom stats predict.lm
+#' @importFrom stats predict
 #'
 #' @examples
 #' # example for wine data
@@ -99,10 +109,13 @@ broken.lm <- function(model, new_observation, ..., baseline = 0) {
 #' plot(explain_1)
 #' plot(explain_1, trans = function(x) exp(x)/(1+exp(x)))
 #'
+#' explain_2 <- broken(model, HR_data[1,], predict.function = betas)
+#' explain_2
+#' plot(explain_2, trans = function(x) exp(x)/(1+exp(x)))
 #' @export
 
-broken.glm <- function(model, new_observation, ..., baseline = 0) {
-  ny <- predict.glm(model, newdata = new_observation, type = "terms")
+broken.glm <- function(model, new_observation, ..., baseline = 0, predict.function = stats::predict.glm) {
+  ny <- predict.function(model, newdata = new_observation, type = "terms")
   terms <- NULL
 
   # add terms with :
@@ -145,7 +158,7 @@ broken.glm <- function(model, new_observation, ..., baseline = 0) {
 #' Create the model agnostic broken object
 #'
 #' @param model a ranger model
-#' @param new_observation a new observation with collumns that corresponds to variables used in the model
+#' @param new_observation a new observation with columns that corresponds to variables used in the model
 #' @param data the original data used for model fitting, should have same collumns as the 'new_observation'.
 #' @param direction either 'up' or 'down' determined the exploration strategy
 #' @param ... other parameters
@@ -169,15 +182,17 @@ broken.glm <- function(model, new_observation, ..., baseline = 0) {
 #' explain_1
 #' plot(explain_1) + ggtitle("breakDown plot (direction=down) for randomForest model")
 #' }
-#'
 #' @export
 
 broken.default <- function(model, new_observation, data, direction = "up", ..., baseline = 0,
                           predict.function = predict) {
   # just in case only some variables are specified
-  common_variables <- intersect(colnames(new_observation), colnames(data))
-  new_observation <- new_observation[,common_variables]
-  data <- data[,common_variables]
+  # this will work only for data.frames
+  if ("data.frame" %in% class(data)) {
+    common_variables <- intersect(colnames(new_observation), colnames(data))
+    new_observation <- new_observation[,common_variables, drop = FALSE]
+    data <- data[,common_variables, drop = FALSE]
+  }
 
   if (direction == "up") {
     broken_sorted <- broken_go_up(model, new_observation, data,
@@ -210,7 +225,7 @@ broken.default <- function(model, new_observation, data, direction = "up", ..., 
 broken_go_up <- function(model, new_observation, data,
                            predict.function = predict, ...) {
   # set target distribution
-  new_data <- new_observation[rep(1,nrow(data)),]
+  new_data <- new_observation[rep(1L, nrow(data)),]
 
   # set target
   target_yhat <- predict.function(model, new_observation, ...)
@@ -252,7 +267,7 @@ broken_go_up <- function(model, new_observation, data,
 broken_go_down <- function(model, new_observation, data,
                            predict.function = predict, ...) {
   # set target distribution
-  new_data <- new_observation[rep(1,nrow(data)),]
+  new_data <- new_observation[rep(1L, nrow(data)),]
 
   # set target
   target_yhat <- predict.function(model, new_observation, ...)
@@ -281,7 +296,7 @@ broken_go_down <- function(model, new_observation, data,
 
   varNames <- rev(colnames(data)[important_variables])
   varValues <- sapply(rev(new_observation[,important_variables]), as.character)
-  contributions <- diff(c(baseline_yhat, rev(sapply(important_yhats, mean))))
+  contributions <- diff(c(rev(sapply(important_yhats, mean)), target_yhat))
 
   broken_sorted <- data.frame(variable = c(paste("-", varNames,  "=", varValues)),
                               contribution = contributions,

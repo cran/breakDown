@@ -4,16 +4,19 @@
 \alias{broken.lm}
 \title{Create the broken object for lm models}
 \usage{
-\method{broken}{lm}(model, new_observation, ..., baseline = 0)
+\method{broken}{lm}(model, new_observation, ..., baseline = 0,
+  predict.function = stats::predict.lm)
 }
 \arguments{
 \item{model}{a lm model}
 
-\item{new_observation}{a new observation with collumns that corresponds to variables used in the model}
+\item{new_observation}{a new observation with columns that corresponds to variables used in the model}
 
 \item{...}{other parameters}
 
 \item{baseline}{the orgin/baseline for the breakDown plots, where the rectangles start. It may be a number or a character "Intercept". In the latter case the orgin will be set to model intercept.}
+
+\item{predict.function}{function that will calculate predictions out of model (typically \code{predict} or \code{betas})}
 }
 \value{
 an object of the broken class
@@ -29,7 +32,14 @@ plot(br)
 
 # works for interactions as well
 model <- lm(Sepal.Length ~ Petal.Width*Species, data = iris)
+summary(model)
+
 new_observation <- iris[1,]
 br <- broken(model, new_observation)
+br
 plot(br)
+
+br2 <- broken(model, new_observation, predict.function = betas)
+br2
+plot(br2)
 }

@@ -4,16 +4,19 @@
 \alias{broken.glm}
 \title{Create the broken object for glm models}
 \usage{
-\method{broken}{glm}(model, new_observation, ..., baseline = 0)
+\method{broken}{glm}(model, new_observation, ..., baseline = 0,
+  predict.function = stats::predict.glm)
 }
 \arguments{
 \item{model}{a glm model}
 
-\item{new_observation}{a new observation with collumns that corresponds to variables used in the model}
+\item{new_observation}{a new observation with columns that corresponds to variables used in the model}
 
 \item{...}{other parameters}
 
-\item{baseline}{the orgin/baseline for the breakDown plots, where the rectangles start. It may be a number or a character "Intercept". In the latter case the orgin will be set to model intercept.}
+\item{baseline}{the origin/baseline for the breakDown plots, where the rectangles start. It may be a number or a character "Intercept". In the latter case the orgin will be set to model intercept.}
+
+\item{predict.function}{function that will calculate predictions out of model (typically \code{predict} or \code{betas})}
 }
 \value{
 an object of the broken class
@@ -40,4 +43,7 @@ explain_1
 plot(explain_1)
 plot(explain_1, trans = function(x) exp(x)/(1+exp(x)))
 
+explain_2 <- broken(model, HR_data[1,], predict.function = betas)
+explain_2
+plot(explain_2, trans = function(x) exp(x)/(1+exp(x)))
 }

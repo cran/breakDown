@@ -4,7 +4,7 @@ author: "Przemyslaw Biecek"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{model agnostic breakDown plots for randomForest}
+  %\VignetteIndexEntry{model agnostic breakDown plots for caret}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
