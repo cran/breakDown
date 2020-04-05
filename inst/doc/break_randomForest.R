@@ -1,20 +1,20 @@
-## ----setup, include = FALSE----------------------------------------------
+## ----setup, include = FALSE---------------------------------------------------
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
 
-## ------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 set.seed(1313)
 
 library(breakDown)
 head(HR_data, 3)
 
-## ------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 library("randomForest")
 model <- randomForest(factor(left)~., data = HR_data, family = "binomial", maxnodes = 5)
 
-## ---- fig.width=7--------------------------------------------------------
+## ---- fig.width=7-------------------------------------------------------------
 library(ggplot2)
 
 predict.function <- function(model, new_observation) predict(model, new_observation, type="prob")[,2]

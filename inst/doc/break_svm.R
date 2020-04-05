@@ -1,10 +1,10 @@
-## ----setup, include = FALSE----------------------------------------------
+## ----setup, include = FALSE---------------------------------------------------
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
 
-## ------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 library("breakDown")
 library(kernlab)
 
@@ -18,7 +18,7 @@ wine_svm_model <- svm(quality~., data = wine)
 wine_svm_model
 
 
-## ------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 library("breakDown")
 nobs <- wine[5, , drop = FALSE]
 base_prediction <- predict(wine_svm_model, nobs)
@@ -34,7 +34,7 @@ explain_5_down <- broken(wine_svm_model, new_observation = nobs,
                     baseline = "intercept", direction = "down")
 explain_5_down
 
-## ---- fig.width=7--------------------------------------------------------
+## ---- fig.width=7-------------------------------------------------------------
 library(ggplot2)
 plot(explain_5_up) + ggtitle(paste0("Prediction for SVM model ", round(base_prediction, 3)))
 plot(explain_5_down) +  ggtitle(paste0("Prediction for SVM model ", round(base_prediction, 3)))

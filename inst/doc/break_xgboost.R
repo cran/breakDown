@@ -1,10 +1,10 @@
-## ----setup, include = FALSE----------------------------------------------
+## ----setup, include = FALSE---------------------------------------------------
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
 
-## ------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 library("breakDown")
 library(xgboost)
 
@@ -15,7 +15,7 @@ param <- list(objective = "reg:linear")
 HR_xgb_model <- xgb.train(param, data_train, nrounds = 50)
 HR_xgb_model
 
-## ------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 library("breakDown")
 nobs <- model_martix_train[1L, , drop = FALSE]
 
@@ -23,7 +23,7 @@ explain_2 <- broken(HR_xgb_model, new_observation = nobs,
                     data = model_martix_train)
 explain_2
 
-## ---- fig.width=7--------------------------------------------------------
+## ---- fig.width=7-------------------------------------------------------------
 library(ggplot2)
 plot(explain_2) + ggtitle("breakDown plot for xgboost model")
 

@@ -1,14 +1,14 @@
-## ----setup, include = FALSE----------------------------------------------
+## ----setup, include = FALSE---------------------------------------------------
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
 
-## ------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 library(breakDown)
 head(HR_data, 3)
 
-## ------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 library(ranger)
 HR_data$left <- factor(HR_data$left)
 model <- ranger(left ~ ., data = HR_data, importance = 'impurity', probability=TRUE, min.node.size = 2000)
@@ -18,7 +18,7 @@ predict.function <- function(model, new_observation) predict(model, new_observat
 predict.function(model, HR_data[11,])
 
 
-## ---- fig.width=7--------------------------------------------------------
+## ---- fig.width=7-------------------------------------------------------------
 library(ggplot2)
 
 explain_1 <- broken(model, HR_data[11,-7], data = HR_data[,-7],
